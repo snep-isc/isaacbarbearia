@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 
@@ -100,8 +100,8 @@ export class FirebaseService {
   }
 
   // Avaliações
-  async addAvaliacao(data: any) {
-    return addDoc(collection(this.firestore, 'avaliacoes'), data);
+  async addAvaliacao(uid: string, data: any) {
+    return setDoc(doc(this.firestore, 'avaliacoes', uid), data);
   }
 
   async getAvaliacoes() {

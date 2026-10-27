@@ -1,3 +1,8 @@
+# Relatórios locais de auditoria (não publicar)
+local-*-audit.json
+firestore-debug.log
+.firebase
+
 # Logs
 logs
 *.log

@@ -6,12 +6,19 @@ service cloud.firestore {
 			allow read, write: if false;
 		}
 
-		// Avaliações (Reviews)
-		match /avaliacoes/{doc=**} {
+		// Avaliações: um documento por UID. Sem e-mail no documento público.
+		match /avaliacoes/{uid} {
 			allow read: if true;
-			allow create: if request.auth != null && request.auth.token.email != null;
-			allow update: if request.auth != null && request.auth.token.email == resource.data.email;
-			allow delete: if request.auth != null && (request.auth.token.email == resource.data.email || isAdmin());
+
+			allow create: if (
+				(estaAutenticado() && uid == request.auth.uid) || isAdmin()
+			) && avaliaaoValida();
+
+			allow update: if (
+				(estaAutenticado() && uid == request.auth.uid) || isAdmin()
+			) && avaliaaoValida();
+
+			allow delete: if isAdmin() || (estaAutenticado() && uid == request.auth.uid);
 		}
 
 		// Reviews (coleções alternativas)
@@ -86,9 +93,30 @@ service cloud.firestore {
 			allow create, update, delete: if isAdmin();
 		}
 
-		// Função para verificar se é admin
+		function estaAutenticado() {
+			return request.auth != null
+				&& request.auth.token.email_verified == true
+				&& request.auth.token.email != null;
+		}
+
+		function avaliaaoValida() {
+			let dados = request.resource.data;
+			return dados.keys().hasOnly(['cliente', 'comentario', 'estrelas', 'data', 'photoURL'])
+				&& dados.cliente is string && dados.cliente.size() > 0 && dados.cliente.size() <= 80
+				&& dados.comentario is string && dados.comentario.size() > 0 && dados.comentario.size() <= 1000
+				&& dados.estrelas is int && dados.estrelas >= 1 && dados.estrelas <= 5
+				&& dados.data is string && dados.data.size() <= 30
+				&& dados.photoURL is string && dados.photoURL.size() <= 500;
+		}
+
+		// Recomendado: custom claim admin=true definida pelo Admin SDK.
+		// A alternativa por e-mail exige e-mail verificado para impedir conta recém-criada.
 		function isAdmin() {
-			return request.auth != null && request.auth.token.email == 'admin@isaacbarbearia.com';
+			return request.auth != null && (
+				request.auth.token.admin == true ||
+				(request.auth.token.email == 'admin@isaacbarbearia.com'
+					&& request.auth.token.email_verified == true)
+			);
 		}
 	}
 }

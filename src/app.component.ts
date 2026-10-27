@@ -2,7 +2,7 @@ import { Component, signal, OnInit, NgZone } from '@angular/core';
 import { CommonModule, NgOptimizedImage } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, addDoc, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, setDoc, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
 
 interface AccordionItem {
@@ -534,15 +534,16 @@ export class AppComponent implements OnInit {
       return;
     }
 
-    // Verificar se tem email (Google Auth)
-    if (!this.currentUser()?.email) {
+    const user = this.currentUser();
+
+    // O documento é identificado pelo UID autenticado.
+    if (!user?.uid) {
       alert('Erro: não foi possível obter seus dados. Faça login novamente.');
       return;
     }
 
-    const userEmail = this.currentUser()?.email;
-    const name = this.currentUser()?.displayName || 'Usuário';
-    const photoUrl = this.currentUser()?.photoURL || '';
+    const name = user.displayName || 'Usuário';
+    const photoUrl = user.photoURL || '';
     const message = this.newReviewMessage().trim();
     const rating = this.newReviewRating();
 
@@ -552,12 +553,9 @@ export class AppComponent implements OnInit {
     }
 
     try {
-      // Verificar se já deixou feedback
-      const avaliacoesSnap = await getDocs(collection(this.db, 'avaliacoes'));
-      const jaAvaliou = avaliacoesSnap.docs.some(doc => {
-        const data = doc.data();
-        return data['email'] === userEmail;
-      });
+      // Um documento por UID: a regra do Firestore recusa duplicatas.
+      const existente = await getDoc(doc(this.db, 'avaliacoes', user.uid));
+      const jaAvaliou = existente.exists();
 
       if (jaAvaliou) {
         alert('Você já deixou um feedback! Obrigado pela sua opinião.');
@@ -567,17 +565,16 @@ export class AppComponent implements OnInit {
 
       console.log('Salvando feedback:', { name, message, rating });
       
-      // Salvar no Firestore
-      const docRef = await addDoc(collection(this.db, 'avaliacoes'), {
+      // Salvar no Firestore, sem expor e-mail no documento público
+      await setDoc(doc(this.db, 'avaliacoes', user.uid), {
         cliente: name,
-        email: userEmail,
         comentario: message,
         estrelas: rating,
         data: new Date().toLocaleDateString('pt-BR'),
         photoURL: photoUrl
       });
-      
-      console.log('Feedback salvo com ID:', docRef.id);
+
+      console.log('Feedback salvo para o UID autenticado');
 
       // Atualizar estado local
       this.items.update(items => {
@@ -587,9 +584,9 @@ export class AppComponent implements OnInit {
               ...item,
               testimonials: [
                 {
-                  id: docRef.id,
+                  id: user.uid,
                   name: name,
-                  email: userEmail,
+                  email: '',
                   comment: message,
                   rating: rating,
                   photoUrl: photoUrl,
@@ -693,12 +690,14 @@ export class AppComponent implements OnInit {
   }
 
   getUserFeedback() {
-    if (!this.currentUser()?.email) return null;
-    
+    // A avaliação própria é o documento com o UID do usuário como ID.
+    const uid = this.currentUser()?.uid;
+    if (!uid) return null;
+
     const feedbackItem = this.items().find(item => item.id === 'feedback');
     if (!feedbackItem?.testimonials) return null;
-    
-    return feedbackItem.testimonials.find(t => t.email === this.currentUser()?.email) || null;
+
+    return feedbackItem.testimonials.find(t => t.id === uid) || null;
   }
 
   // Métodos para filtrar serviços por categoria

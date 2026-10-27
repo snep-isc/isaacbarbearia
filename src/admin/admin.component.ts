@@ -31,10 +31,16 @@ export class AdminComponent implements OnInit {
     // Verificar se usuário está autenticado
     const auth = getAuth();
     onAuthStateChanged(auth, (user) => {
-      if (user) {
+      // Keep this UI gate aligned with isAdmin() in firestore.rules.
+      if (user?.email === 'admin@isaacbarbearia.com') {
         this.usuarioLogado = user;
         this.carregarDados();
       } else {
+        this.usuarioLogado = null;
+        this.profissionais = [];
+        this.parceiros = [];
+        this.participacoes = [];
+        this.avaliacoes = [];
         // Se não está autenticado, redireciona para login
         this.router.navigate(['/admin/login']);
       }

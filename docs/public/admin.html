@@ -789,7 +789,7 @@
     }
   </style>
 </head>
-<body>
+<body hidden>
   <div class="container">
     <h1>Painel Admin - Isaac Barbearia</h1>
     
@@ -825,7 +825,7 @@
         </form>
         <div id="obs-servicos-display" style="margin-top: 15px; padding: 12px 14px; background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); border-radius: 8px; color: #000; font-style: italic; font-weight: 600; border-left: 4px solid #ff8c00; box-shadow: 0 6px 18px rgba(0,0,0,0.35); display: none;"></div>
       </div>
-      
+
       <form onsubmit="addServico(event)">
         <input type="text" id="serv-nome" placeholder="Nome do Serviço" required>
         <select id="serv-realiza" required>
@@ -922,7 +922,6 @@
       <h2>Feedback dos Clientes</h2>
       <form onsubmit="return addAvaliacaoManual(event)">
         <input type="text" id="aval-nome" placeholder="Nome do cliente" required>
-        <input type="email" id="aval-email" placeholder="Email (opcional)">
         <input type="url" id="aval-foto" placeholder="URL da foto (opcional)">
         <select id="aval-estrelas" required>
           <option value="">Nota (1 a 5)</option>
@@ -958,6 +957,7 @@
   </div>
 
   <script type="module">
+    import { isAdmin, escapeHtml, escapeDisplayData, safeHttpUrl, deleteButton, renderReviews } from './admin-security.js';
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -986,8 +986,22 @@
             const textarea = document.getElementById('obs-servicos');
             const display = document.getElementById('obs-servicos-display');
             if (textarea) textarea.value = observacao;
-            if (display) display.innerHTML = observacao;
+            if (display) {
+              display.textContent = observacao;
+              display.style.display = 'block';
+            }
+          } else {
+            const display = document.getElementById('obs-servicos-display');
+            if (display) {
+              display.textContent = '';
+              display.style.display = 'none';
+            }
           }
+        }
+      } catch (err) {
+        console.log('Erro ao carregar observação:', err);
+      }
+    };
 
     window.clearObservacaoServicos = async () => {
       try {
@@ -997,27 +1011,23 @@
         const display = document.getElementById('obs-servicos-display');
         if (textarea) textarea.value = '';
         if (display) {
-          display.innerHTML = '';
+          display.textContent = '';
           display.style.display = 'none';
         }
       } catch (err) {
         alert('Erro ao limpar: ' + err.message);
       }
     };
-        }
-      } catch (err) {
-        console.log('Erro ao carregar observação:', err);
-      }
-    };
-
     // Verifica autenticação
     onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.href = './login.html';
+      if (!isAdmin(user)) {
+        document.body.hidden = true;
+        window.location.replace('./login.html');
       } else {
+        document.body.hidden = false;
         // Carregar dados APÓS autenticação
         console.log('Usuário autenticado, carregando dados...');
-        
+
         // Carregar tudo ao autenticar
         loadServicos();
         loadProfissionais();
@@ -1103,7 +1113,7 @@
         console.log('📊 Total de documentos no Firebase:', snapshot.size);
         
         // Agrupa por nome para detectar e eliminar duplicatas
-        const servicosPorNome = {};
+        const servicosPorNome = Object.create(null);
         snapshot.forEach(doc => {
           const data = doc.data();
           if (!servicosPorNome[data.nome]) {
@@ -1145,12 +1155,13 @@
         // Renderiza Sim (Verde)
         if (servicosPorStatus.sim.length > 0) {
           const cardsText = servicosPorStatus.sim.map((item, index) => {
-            const precoText = item.data.preco > 0 ? `R$ ${item.data.preco.toFixed(0)}` : '-';
+            const preco = Number(item.data.preco);
+            const precoText = Number.isFinite(preco) && preco > 0 ? `R$ ${preco.toFixed(0)}` : '-';
             return `<div class="card color-green">
-              <h3><span class="servico-index">${index + 1}</span>${item.data.nome}</h3>
+              <h3><span class="servico-index">${index + 1}</span>${escapeHtml(item.data.nome)}</h3>
               <p><strong>Realizamos:</strong> Sim</p>
               <p><strong>Preço:</strong> ${precoText}</p>
-              <button class="btn-delete" onclick="deleteServico('${item.servico.id}')">Deletar</button>
+              ${deleteButton('deleteServico', item.servico.id)}
             </div>`;
           }).join('');
           
@@ -1171,10 +1182,10 @@
         if (servicosPorStatus.embreve.length > 0) {
           const cardsText = servicosPorStatus.embreve.map((item, index) => {
             return `<div class="card color-yellow">
-              <h3><span class="servico-index">${index + 1}</span>${item.data.nome}</h3>
+              <h3><span class="servico-index">${index + 1}</span>${escapeHtml(item.data.nome)}</h3>
               <p><strong>Realizamos:</strong> Em Breve</p>
               <p><strong>Preço:</strong> -</p>
-              <button class="btn-delete" onclick="deleteServico('${item.servico.id}')">Deletar</button>
+              ${deleteButton('deleteServico', item.servico.id)}
             </div>`;
           }).join('');
           
@@ -1195,10 +1206,10 @@
         if (servicosPorStatus.nao.length > 0) {
           const cardsText = servicosPorStatus.nao.map((item, index) => {
             return `<div class="card color-red">
-              <h3><span class="servico-index">${index + 1}</span>${item.data.nome}</h3>
+              <h3><span class="servico-index">${index + 1}</span>${escapeHtml(item.data.nome)}</h3>
               <p><strong>Realizamos:</strong> Não</p>
               <p><strong>Preço:</strong> -</p>
-              <button class="btn-delete" onclick="deleteServico('${item.servico.id}')">Deletar</button>
+              ${deleteButton('deleteServico', item.servico.id)}
             </div>`;
           }).join('');
           
@@ -1234,7 +1245,7 @@
       
       try {
         const snapshot = await getDocs(collection(db, 'servicos'));
-        const servicosPorNome = {};
+        const servicosPorNome = Object.create(null);
         
         // Agrupa por nome
         snapshot.forEach(doc => {
@@ -1273,7 +1284,7 @@
     };
 
     // Observação de Serviços
-    window.loadObservacaoServicos = async () => {
+    window.saveObservacaoServicos = async (e) => {
       e.preventDefault();
       const texto = document.getElementById('obs-servicos').value;
       
@@ -1283,16 +1294,7 @@
         loadObservacaoServicos();
       } catch (err) {
         alert('Erro ao salvar: ' + err.message);
-            if (display) {
-              display.innerHTML = observacao;
-              display.style.display = 'block';
-            }
-          } else {
-            const display = document.getElementById('obs-servicos-display');
-            if (display) {
-              display.innerHTML = '';
-              display.style.display = 'none';
-            }
+      }
     };
 
     window.toggleServicos = (header) => {
@@ -1375,8 +1377,10 @@
           if (uniqueIds.has(doc.id)) return;
           uniqueIds.add(doc.id);
           
-          const data = doc.data();
-          const imgHtml = data.imagem ? `<img src="${data.imagem}" alt="${data.nome}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:10px;">` : '';
+          const rawData = doc.data();
+          const data = escapeDisplayData(rawData);
+          const imageUrl = safeHttpUrl(rawData.imagem);
+          const imgHtml = imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${data.nome}" referrerpolicy="no-referrer" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:10px;">` : '';
           const color = colors[colorIndex % colors.length];
           colorIndex++;
           
@@ -1384,7 +1388,7 @@
             ${imgHtml}
             <h3>${data.nome}</h3>
             <p><strong>Especialidade:</strong> ${data.especialidade}</p>
-            <button class="btn-delete" onclick="deleteProfissional('${doc.id}')">Deletar</button>
+            ${deleteButton('deleteProfissional', doc.id)}
           </div>`);
         });
         list.innerHTML = rows.join('');
@@ -1428,15 +1432,17 @@
           if (uniqueIds.has(doc.id)) return;
           uniqueIds.add(doc.id);
           
-          const data = doc.data();
-          const imgHtml = data.imagem ? `<img src="${data.imagem}" alt="${data.nome}" style="width:80px;height:auto;border-radius:8px;object-fit:cover;margin-bottom:10px;">` : '';
+          const rawData = doc.data();
+          const data = escapeDisplayData(rawData);
+          const imageUrl = safeHttpUrl(rawData.imagem);
+          const imgHtml = imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${data.nome}" referrerpolicy="no-referrer" style="width:80px;height:auto;border-radius:8px;object-fit:cover;margin-bottom:10px;">` : '';
           const color = colors[colorIndex % colors.length];
           colorIndex++;
           
           rows.push(`<div class="card ${color}">
             ${imgHtml}
             <h3>${data.nome}</h3>
-            <button class="btn-delete" onclick="deleteParceiro('${doc.id}')">Deletar</button>
+            ${deleteButton('deleteParceiro', doc.id)}
           </div>`);
         });
         list.innerHTML = rows.join('');
@@ -1481,7 +1487,7 @@
           if (uniqueIds.has(doc.id)) return;
           uniqueIds.add(doc.id);
           
-          const data = doc.data();
+          const data = escapeDisplayData(doc.data());
           const color = colors[colorIndex % colors.length];
           colorIndex++;
           
@@ -1489,7 +1495,7 @@
           <h3>${data.titulo}</h3>
           <p>${data.descricao || ''}</p>
           <p><strong>Data:</strong> ${data.data}</p>
-          <button class="btn-delete" onclick="deleteParticipacao('${doc.id}')">Deletar</button>
+          ${deleteButton('deleteParticipacao', doc.id)}
         </div>`);
         });
         list.innerHTML = cards.join('');
@@ -1507,42 +1513,15 @@
 
     // Avaliações - Com listener em tempo real
     let avaliacoesUnsubscribe = null;
-    function getInitials(name, email) {
-      const base = (name && name.trim()) ? name.trim() : (email || '');
-      if (!base) return 'U';
-      const parts = base.split(/\s+/).filter(Boolean);
-      if (parts.length === 1) return parts[0].slice(0, 2);
-      return `${parts[0][0] || ''}${parts[1][0] || ''}`.trim();
-    }
-
-    function normalizeReviewData(data) {
-      const cliente = data.cliente ?? data.customer ?? data.nome ?? data.name ?? 'Sem nome';
-      const comentario = data.comentario ?? data.comments ?? data.comment ?? 'Sem comentário';
-      const estrelas = data.estrelas ?? data.Stars ?? data.stars ?? data.rating ?? 0;
-      const dataTextoBruto = data.data ?? data.date ?? data.Data ?? '';
-      const email = data.email ?? data.Email ?? data.emailAddress ?? '';
-      const foto = data.photoURL ?? data.photoUrl ?? data.foto ?? data.fotoUrl ?? data.avatar ?? data.image ?? data.imagem ?? data.profilePhoto ?? '';
-      let dataTexto = dataTextoBruto;
-      if (typeof dataTextoBruto === 'string' && dataTextoBruto.includes('T')) {
-        const parsed = new Date(dataTextoBruto);
-        if (!isNaN(parsed.getTime())) {
-          dataTexto = parsed.toLocaleDateString('pt-BR');
-        }
-      }
-      return { cliente, comentario, estrelas, dataTexto, email, foto };
-    }
-
     window.addAvaliacaoManual = async (e) => {
       e.preventDefault();
       try {
         const data = {
           cliente: document.getElementById('aval-nome').value.trim(),
-          email: document.getElementById('aval-email').value.trim() || '',
           photoURL: document.getElementById('aval-foto').value.trim() || '',
           estrelas: Number(document.getElementById('aval-estrelas').value),
           comentario: document.getElementById('aval-comentario').value.trim(),
-          data: new Date().toISOString(),
-          manual: true
+          data: new Date().toLocaleDateString('pt-BR')
         };
         await addDoc(collection(db, 'avaliacoes'), data);
         e.target.reset();
@@ -1554,50 +1533,8 @@
     };
 
     function renderAvaliacoes(list, docs) {
-      if (!docs || docs.length === 0) {
-        list.innerHTML = '<p style="text-align: center; color: #999;">Nenhuma avaliação ainda</p>';
-        document.getElementById('count-avaliacoes').textContent = 0;
-        return;
-      }
-
-      const uniqueIds = new Set();
-      const cards = [];
-      let colorIndex = 0;
-      const colors = ['color-blue', 'color-green', 'color-purple', 'color-pink', 'color-yellow'];
-
-      docs.forEach(doc => {
-        const key = doc?.ref?.parent?.id ? `${doc.ref.parent.id}:${doc.id}` : doc.id;
-        if (uniqueIds.has(key)) return;
-        uniqueIds.add(key);
-
-        const data = doc.data();
-        const collectionName = doc?.ref?.parent?.id || 'avaliacoes';
-        const review = normalizeReviewData(data);
-        const initials = getInitials(review.cliente, review.email);
-        const avatarHtml = review.foto
-          ? `<img class="review-avatar" src="${review.foto}" alt="${review.cliente}">`
-          : `<div class="review-initials">${initials}</div>`;
-        const color = colors[colorIndex % colors.length];
-        colorIndex++;
-
-        console.log('Renderizando avaliação:', data);
-        cards.push(`<div class="card ${color}">
-          <div class="review-header">
-            ${avatarHtml}
-            <div class="review-info">
-              <h3 class="review-name">${review.cliente}</h3>
-              ${review.email ? `<small>${review.email}</small>` : ''}
-            </div>
-          </div>
-          <p><strong>Estrelas:</strong> ${review.estrelas}/5</p>
-          <p>${review.comentario}</p>
-          <p><small>${review.dataTexto || 'Sem data'}</small></p>
-          <button class="btn-delete" onclick="deleteAvaliacao('${doc.id}','${collectionName}')">Deletar</button>
-        </div>`);
-      });
-
-      list.innerHTML = cards.join('');
-      document.getElementById('count-avaliacoes').textContent = cards.length;
+      document.getElementById('count-avaliacoes').textContent =
+        renderReviews(list, docs, (id, collectionName) => window.deleteAvaliacao(id, collectionName));
     }
 
     async function loadAvaliacoesFallback(list) {
@@ -1676,11 +1613,13 @@
 
     async function displayLocalizacao(data) {
       const display = document.getElementById('loc-display');
+      const mapsUrl = escapeHtml(safeHttpUrl(data.googleMapsLink));
+      data = escapeDisplayData(data);
       display.innerHTML = `
         <p><strong>📍 ${data.endereco}</strong></p>
         <p>${data.bairro}, ${data.cidade}</p>
         <p><em>${data.referencia}</em></p>
-        <p><strong>🗺️ Google Maps:</strong> <a href="${data.googleMapsLink}" target="_blank" style="color: #ff8c00; text-decoration: underline;">${data.googleMapsLink || 'Não configurado'}</a></p>
+        <p><strong>🗺️ Google Maps:</strong> <a ${mapsUrl ? `href="${mapsUrl}"` : ''} target="_blank" rel="noopener noreferrer" style="color: #ff8c00; text-decoration: underline;">${data.googleMapsLink || 'Não configurado'}</a></p>
       `;
     }
 
@@ -1720,6 +1659,7 @@
 
     async function displayHorarios(data) {
       const display = document.getElementById('hor-display');
+      data = escapeDisplayData(data);
       let html = `
         <p><strong>⏰ Horários de Funcionamento</strong></p>
         <p>Segunda a Sexta: ${data.segSex}</p>
@@ -1771,15 +1711,16 @@
 
     async function displayAgendamento(data) {
       const display = document.getElementById('agen-display');
-      const whatsappLink = `https://wa.me/${data.whatsapp.replace(/\D/g, '')}`;
-      const telefoneLink = `tel:${data.telefone.replace(/\D/g, '')}`;
+      const whatsappLink = `https://wa.me/${String(data.whatsapp ?? '').replace(/\D/g, '')}`;
+      const telefoneLink = `tel:${String(data.telefone ?? '').replace(/\D/g, '')}`;
+      data = escapeDisplayData(data);
       let observacaoHtml = '';
       if (data.observacao) {
         observacaoHtml = `<p style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-left: 3px solid #ffd700; border-radius: 4px;"><strong style="display: flex; align-items: center; gap: 6px;"><svg style="width: 18px; height: 18px; fill: #ffd700;" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>Observação:</strong> ${data.observacao}</p>`;
       }
       display.innerHTML = `
         <p><strong>📞 Agendamento</strong></p>
-        <p>WhatsApp: <a href="${whatsappLink}" target="_blank" style="color: #ff8c00; text-decoration: none;">${data.whatsapp} 💬</a></p>
+        <p>WhatsApp: <a href="${whatsappLink}" target="_blank" rel="noopener noreferrer" style="color: #ff8c00; text-decoration: none;">${data.whatsapp} 💬</a></p>
         <p>Telefone: <a href="${telefoneLink}" style="color: #ff8c00; text-decoration: none;">${data.telefone} ☎️</a></p>
         <p>${data.info}</p>
         ${observacaoHtml}
@@ -1826,7 +1767,7 @@
         snapshot.forEach(doc => {
           const data = doc.data();
           const tipo = ['danger', 'warning', 'success', 'info'].includes(data.tipo) ? data.tipo : 'info';
-          avisosPorTipo[tipo].push({ id: doc.id, ...data });
+          avisosPorTipo[tipo].push({ ...data, id: doc.id });
         });
 
         const sections = [
@@ -1847,10 +1788,10 @@
           const cardsText = itens.map(aviso => {
             const dataTexto = aviso.data ? new Date(aviso.data).toLocaleString('pt-BR') : '';
             return `<div class="card" style="border-left: 4px solid ${color};">
-              <h3 style="color: ${color};">${aviso.titulo}</h3>
-              <p>${aviso.conteudo}</p>
+              <h3 style="color: ${color};">${escapeHtml(aviso.titulo)}</h3>
+              <p>${escapeHtml(aviso.conteudo)}</p>
               <small>${dataTexto}</small>
-              <button class="btn-delete" onclick="deleteAviso('${aviso.id}')">Deletar</button>
+              ${deleteButton('deleteAviso', aviso.id)}
             </div>`;
           }).join('');
 
@@ -1889,6 +1830,20 @@
         loadAvisos();
       }
     };
+
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-delete-action]');
+      if (!button || !isAdmin(auth.currentUser)) return;
+      const actions = {
+        deleteServico: window.deleteServico,
+        deleteProfissional: window.deleteProfissional,
+        deleteParceiro: window.deleteParceiro,
+        deleteParticipacao: window.deleteParticipacao,
+        deleteAviso: window.deleteAviso
+      };
+      const action = actions[button.dataset.deleteAction];
+      if (Object.hasOwn(actions, button.dataset.deleteAction)) action(button.dataset.documentId);
+    });
   </script>
 </body>
 </html>

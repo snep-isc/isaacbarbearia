@@ -31,6 +31,8 @@ function copyDir(src, dest) {
 if (fs.existsSync(distDir)) {
   console.log('Copying dist/ to docs/...');
   copyDir(distDir, docsDir);
+  // Preserve legacy /public/ URLs without leaving an older administrative panel online.
+  copyDir(path.join(__dirname, '../public'), path.join(docsDir, 'public'));
   console.log('✅ Files copied successfully!');
 } else {
   console.error('❌ dist/ folder not found');

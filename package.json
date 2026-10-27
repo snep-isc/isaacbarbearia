@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:security": "node --test scripts/security.test.mjs",
+    "test:auth-local": "firebase emulators:exec --config firebase.security-test.json --project demo-isaac-security --only auth,firestore \"node scripts/auth-attack-local.mjs\"",
+    "test:rules": "firebase emulators:exec --config firebase.security-test.json --project demo-isaac-rules --only firestore \"node --test scripts/rules-proposed-test.mjs\"",
+    "test:intrusion-local": "firebase emulators:exec --config firebase.security-test.json --project demo-isaac-security --only auth,firestore \"node scripts/run-intrusion-local.mjs\"",
     "dev": "ng serve",
     "build": "ng build && node scripts/copy-to-docs.cjs",
     "preview": "ng serve --configuration=production"
@@ -26,8 +30,10 @@
     "tailwindcss": "latest"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@types/node": "^22.14.0",
-    "typescript": "~5.8.2",
+    "firebase-tools": "^15.34.1",
+    "typescript": "~5.9.3",
     "vite": "^6.2.0"
   }
 }
