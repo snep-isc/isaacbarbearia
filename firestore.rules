@@ -12,11 +12,11 @@ service cloud.firestore {
 
 			allow create: if (
 				(estaAutenticado() && uid == request.auth.uid) || isAdmin()
-			) && avaliaaoValida();
+			) && avaliacaoValida();
 
 			allow update: if (
 				(estaAutenticado() && uid == request.auth.uid) || isAdmin()
-			) && avaliaaoValida();
+			) && avaliacaoValida();
 
 			allow delete: if isAdmin() || (estaAutenticado() && uid == request.auth.uid);
 		}
@@ -99,7 +99,7 @@ service cloud.firestore {
 				&& request.auth.token.email != null;
 		}
 
-		function avaliaaoValida() {
+		function avaliacaoValida() {
 			let dados = request.resource.data;
 			return dados.keys().hasOnly(['cliente', 'comentario', 'estrelas', 'data', 'photoURL'])
 				&& dados.cliente is string && dados.cliente.size() > 0 && dados.cliente.size() <= 80
