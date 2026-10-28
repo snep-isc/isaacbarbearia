@@ -1,3 +1,6 @@
+# Cache de compilação do Angular (não versionar)
+.angular/
+
 # Relatórios locais de auditoria (não publicar)
 local-*-audit.json
 firestore-debug.log
